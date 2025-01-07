@@ -23,17 +23,27 @@ bool init()
     }
     else
     {
-      // check if the image ext works
-      int imgFlags = IMG_INIT_PNG; 
-      if( !( IMG_Init( imgFlags ) & imgFlags ) )
+      // Create renderer for window
+      gRenderer = SDL_CreateRenderer( gWindow, -1, SDL_RENDERER_ACCELERATED );
+      if( gRenderer == NULL )
       {
-        printf( "SDL_image could not initialize! SDL_image Error: %s\n", IMG_GetError() );
+        printf( "Renderer could not be created! SDL Error: %s\n", SDL_GetError() );
         success = false;
       }
       else
       {
-        // Get window surface
-        gScreenSurface = SDL_GetWindowSurface( gWindow );
+        // Initialize renderer color
+        SDL_SetRenderDrawColor( gRenderer, 0xFF, 0xFF, 0xFF, 0xFF );
+
+        // Initialize PNG loading
+        int imgFlags = IMG_INIT_PNG;
+        if( !( IMG_Init( imgFlags ) & imgFlags ) )
+        {
+          printf( "SDL_image could not initialize! SDL_image Error: %s\n", IMG_GetError() );
+          success = false;
+        }
+
+        // gScreenSurface = SDL_GetWindowSurface( gWindow );
       }
     }
   }
@@ -41,69 +51,40 @@ bool init()
   return success;
 }
 
-SDL_Surface* loadSurface( std::string path ) {
-  SDL_Surface* optimizedSurface = NULL;
+SDL_Texture* loadTexture( std::string path ) {
+  SDL_Texture* newTexture = NULL;
 
-  SDL_Surface* loadedSurface = IMG_Load( path.c_str() );
+  SDL_Surface* loadedSurface = IMG_Load(path.c_str());
 
-  if( loadedSurface == NULL )
+  // IMG_LoadTexture makes it easier
+
+  if(loadedSurface == NULL)
   {
-    printf( "Unable to load image %s! SDL Error: %s\n", path.c_str(), SDL_GetError() );
+    printf( "Unable to load image %s! SDL_image Error: %s\n", path.c_str(), IMG_GetError() );
   } else {
-    optimizedSurface = SDL_ConvertSurface( loadedSurface, gScreenSurface->format, 0 );
+    newTexture = SDL_CreateTextureFromSurface( gRenderer, loadedSurface );
 
-    if( optimizedSurface == NULL )
+    if(newTexture == NULL)
     {
-      printf( "Unable to optimize image %s! SDL Error: %s\n", path.c_str(), SDL_GetError() );
+      printf( "Unable to create texture from %s! SDL Error: %s\n", path.c_str(), SDL_GetError() );
     }
 
-    SDL_FreeSurface( loadedSurface );
+    //Get rid of old loaded surface
+    SDL_FreeSurface(loadedSurface);
   }
 
-  return optimizedSurface;
+  return newTexture;
 }
 
 bool loadMedia()
 {
   bool loading = true;
 
-  gKeyPressSurfaces[ KEY_PRESS_SURFACE_DEFAULT ] = loadSurface( "lib/press.bmp" );
+  gTexture = loadTexture( "lib/texture.png" );
 
-  if( gKeyPressSurfaces[ KEY_PRESS_SURFACE_DEFAULT ] == NULL )
+  if( gTexture == NULL )
   {
-    printf( "Failed to load default image!\n" );
-    loading = false;
-  }
-
-  gKeyPressSurfaces[ KEY_PRESS_SURFACE_UP ] = loadSurface( "lib/up.bmp" );
-
-  if( gKeyPressSurfaces[ KEY_PRESS_SURFACE_UP ] == NULL )
-  {
-    printf( "Failed to load up image!\n" );
-    loading = false;
-  }
-
-  gKeyPressSurfaces[ KEY_PRESS_SURFACE_DOWN ] = loadSurface( "lib/down.bmp" );
-
-  if( gKeyPressSurfaces[ KEY_PRESS_SURFACE_DOWN ] == NULL )
-  {
-    printf( "Failed to load down image!\n" );
-    loading = false;
-  }
-
-  gKeyPressSurfaces[ KEY_PRESS_SURFACE_LEFT ] = loadSurface( "lib/left.bmp" );
-
-  if( gKeyPressSurfaces[ KEY_PRESS_SURFACE_LEFT ] == NULL )
-  {
-    printf( "Failed to load left image!\n" );
-    loading = false;
-  }
-
-  gKeyPressSurfaces[ KEY_PRESS_SURFACE_RIGHT ] = loadSurface( "lib/right.bmp" );
-
-  if( gKeyPressSurfaces[ KEY_PRESS_SURFACE_RIGHT ] == NULL )
-  {
-    printf( "Failed to load right image!\n" );
+    printf( "Failed to load texture!\n" );
     loading = false;
   }
 
@@ -112,22 +93,20 @@ bool loadMedia()
 
 void close()
 {
-	//Deallocate surfaces
-	for( int i = 0; i < KEY_PRESS_SURFACE_TOTAL; ++i )
-	{
-		SDL_FreeSurface( gKeyPressSurfaces[ i ] );
-		gKeyPressSurfaces[ i ] = NULL;
-	}
+  // Free allocated memory
+  SDL_DestroyTexture(gTexture);
+  gTexture = NULL;
 
-  // SDL_FreeSurface(gCurrentSurface);
-  // gCurrentSurface = NULL;
+  // Destroy window    
+  SDL_DestroyRenderer(gRenderer);
+  SDL_DestroyWindow(gWindow);
 
-	//Destroy window
-	SDL_DestroyWindow( gWindow );
-	gWindow = NULL;
+  gWindow = NULL;
+  gRenderer = NULL;
 
-	//Quit SDL subsystems
-	SDL_Quit();
+  // Quit SDL subsystems
+  IMG_Quit();
+  SDL_Quit();
 }
 
 int main(int argc, char *args[])
@@ -151,54 +130,23 @@ int main(int argc, char *args[])
 
       bool quit = false;
 
-      gCurrentSurface = gKeyPressSurfaces[KEY_PRESS_SURFACE_DEFAULT];
-
       while (!quit)
       {
         while (SDL_PollEvent(&e) != 0)
         {
           if (e.type == SDL_QUIT) {
             quit = true;
-          } 
-          else if (e.type == SDL_KEYDOWN) 
-          {
-            switch( e.key.keysym.sym )
-            {
-              case SDLK_UP:
-              gCurrentSurface = gKeyPressSurfaces[ KEY_PRESS_SURFACE_UP ];
-              break;
-
-              case SDLK_DOWN:
-              gCurrentSurface = gKeyPressSurfaces[ KEY_PRESS_SURFACE_DOWN ];
-              break;
-
-              case SDLK_LEFT:
-              gCurrentSurface = gKeyPressSurfaces[ KEY_PRESS_SURFACE_LEFT ];
-              break;
-
-              case SDLK_RIGHT:
-              gCurrentSurface = gKeyPressSurfaces[ KEY_PRESS_SURFACE_RIGHT ];
-              break;
-
-              default:
-              gCurrentSurface = gKeyPressSurfaces[ KEY_PRESS_SURFACE_DEFAULT ];
-              break;
-            }
           }
         }
 
-        SDL_Rect stretchRect;
+        // Clear screen
+        SDL_RenderClear(gRenderer);
 
-        stretchRect.x = 0;
-        stretchRect.y = 0;
-        stretchRect.w = SCREEN_WIDTH;
-        stretchRect.h = SCREEN_HEIGHT;
+        // Render texture to screen
+        SDL_RenderCopy(gRenderer, gTexture, NULL, NULL);
 
-        // scale image to window size by adding the width and height
-        SDL_BlitScaled( gCurrentSurface, NULL, gScreenSurface, &stretchRect );
-
-        // Update the surface
-        SDL_UpdateWindowSurface(gWindow);
+        // Update screen
+        SDL_RenderPresent(gRenderer);
       }
     }
   }
